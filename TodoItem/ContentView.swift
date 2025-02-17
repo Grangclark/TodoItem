@@ -9,80 +9,99 @@ import SwiftUI
 import CoreData
 
 struct ContentView: View {
-    @Environment(\.managedObjectContext) private var viewContext
-
+    @Environment(\.managedObjectContext) var viewContext
+    
+    // TodoItemをタイトル順にしてソートして取得
     @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \Item.timestamp, ascending: true)],
+        sortDescriptors: [NSSortDescriptor(keyPath: \TodoItem.title, ascending: true)],
         animation: .default)
-    private var items: FetchedResults<Item>
-
+    // FetchResultじゃなくてFetchedResultsな！間違えないように！
+    var todoItems: FetchedResults<TodoItem>
+    
+    @State private var newTaskTitle: String = ""
+    
     var body: some View {
         NavigationView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp!, formatter: itemFormatter)")
-                    } label: {
-                        Text(item.timestamp!, formatter: itemFormatter)
+            VStack {
+                // タスク追加用のフォーム部分
+                HStack {
+                    TextField("新しいタスクを入力", text: $newTaskTitle)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    Button(action: addTask) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title)
                     }
+                    .disabled(newTaskTitle.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
+                .padding()
+                
+                // タスク一覧表示
+                List {
+                    ForEach(todoItems) { item in
+                        HStack {
+                            Button(action: {
+                                toggleCompletion(for: item)
+                            }) {
+                                Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
+                                    .foregroundColor(item.isCompleted ? .green : .gray)
+                            }
+                            Text(item.title ?? "Untitled")
+                                .strikethrough(item.isCompleted, color: .black)
+                        }
                     }
+                    .onDelete(perform: deleteTasks)
                 }
             }
-            Text("Select an item")
+            .navigationTitle("TODOリスト")
         }
     }
-
-    private func addItem() {
+                                      
+    // タスクの追加処理
+    private func addTask() {
         withAnimation {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-
+            let newItem = TodoItem(context: viewContext)
+            newItem.id = UUID()
+            newItem.title = newTaskTitle
+            newItem.isCompleted = false
+                                        
+            do {
+                try viewContext.save()
+                newTaskTitle = "" // 保存後に入力欄をクリア
+            } catch {
+                print("タスクの保存に失敗しました: \(error.localizedDescription)")
+            }
+        }
+    }
+                                
+    // タスクの完了状態を切り替える処理
+    private func toggleCompletion(for item: TodoItem) {
+        withAnimation {
+            item.isCompleted.toggle()
             do {
                 try viewContext.save()
             } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+                print("タスク更新に失敗しました: \(error.localizedDescription)")
             }
         }
     }
-
-    private func deleteItems(offsets: IndexSet) {
+                                      
+    // タスクの削除処理
+    private func deleteTasks(offsets: IndexSet) {
         withAnimation {
-            offsets.map { items[$0] }.forEach(viewContext.delete)
-
+            offsets.map { todoItems[$0] }.forEach(viewContext.delete)
             do {
                 try viewContext.save()
             } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+                print("タスク削除に失敗しました: \(error.localizedDescription)")
             }
         }
     }
 }
 
-private let itemFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .short
-    formatter.timeStyle = .medium
-    return formatter
-}()
-
+/*
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }
 }
+*/
